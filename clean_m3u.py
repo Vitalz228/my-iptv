@@ -2,19 +2,50 @@ import os
 import re
 import urllib.request
 
-# Прямая ссылка на твой плейлист
 URL = "https://raw.githubusercontent.com/IPTVRU2026/IPTVMIR/main/IPTV_MEGA_PLAYLIST.m3u"
 OUTPUT_FILE = "cleaned.m3u"
 
-# Стоп-слова: всё это вырезается без пощады
-STOP_WORDS = [
-    r"\+\d", r"\(\+\d\)", r"timeshift", r"резерв", r"тест", r"test", r"offline",
-    "самара", "уфа", "казань", "тюмень", "екатеринбург", "краснодар", "красноярск",
-    "новосибирск", "владивосток", "хабаровск", "крым", "сочи", "питер", "спб",
-    "нижний новгород", "челябинск", "пермь", "волгоград", "саратов", "иркутск",
-    "кубань", "башкортостан", "татарстан", "дон-тр", "губерния", "армения", "беларусь"
+# 1. ЧАСОВЫЕ ПОЯСА И ТЕХНИЧЕСКИЙ МУСОР
+GARBAGE_PATTERNS = [
+    r"\+\d", r"\(\+\d\)", r"timeshift", r"резерв", r"тест", r"test", 
+    r"offline", r"заглушка", r"инфоканал", r"promo", r"промо"
 ]
 
+# 2. ВЗРОСЛЫЕ КАНАЛЫ (18+)
+ADULT_PATTERNS = [
+    r"18\+", r"xxx", r"porn", r"adult", r"hustler", r"brazzers", r"penthouse",
+    r"playboy", r"русская ночь", r"blue hustler", r"redlight", r"erox", r"dorcel",
+    r"nuart", r"babes", r"candy", r"exotic", r"passion", r"эротика", r"эротик",
+    r"эро", r"sex", r"секс", r"private", r"о-ля-ля", r"o-la-la", r"nightman"
+]
+
+# 3. УЗБЕКСКИЕ КАНАЛЫ
+UZBEK_PATTERNS = [
+    r"узбек", r"uzbek", r"uzb", r"ташкент", r"toshkent", r"самарканд", r"samarqand",
+    r"sevimli", r"zo'r", r"zor tv", r"my5", r"milliy", r"dunyo", r"yoshlar", 
+    r"navo", r"madaniyat", r"farg'ona", r"fergana", r"uzreport", r"o'zbekiston", 
+    r"ozbekiston", r"ruxsor", r"xorazm", r"andijon", r"qashqadaryo", r"surxondaryo"
+]
+
+# 4. РЕГИОНЫ РФ (Города, области, местные ГТРК)
+REGIONAL_PATTERNS = [
+    r"гтрк", r"дон-тр", r"дон 24", r"губерния", r"бст", r"тнв", r"югра", r"ямал",
+    r"кубань", r"башкортостан", r"татарстан", r"моя удмуртия", r"чаваш ен",
+    r"самара", r"уфа", r"казань", r"тюмень", r"екатеринбург", r"краснодар", 
+    r"красноярск", r"новосибирск", r"владивосток", r"хабаровск", r"крым", 
+    r"сочи", r"питер", r"спб", r"нижний новгород", r"челябинск", r"пермь", 
+    r"волгоград", r"саратов", r"иркутск", r"воронеж", r"омск", r"ростов", 
+    r"барнаул", r"кемерово", r"томск", r"астрахань", r"пенза", r"липецк", 
+    r"рязань", r"тула", r"курск", r"тверь", r"ставрополь", r"белгород", 
+    r"архангельск", r"вологда", r"калуга", r"чита", r"смоленск", r"курган", 
+    r"орел", r"тамбов", r"кострома", r"псков", r"мурманск", r"якутск", 
+    r"норильск", r"грозный", r"дагестан", r"осетия", r"армения", r"беларусь"
+]
+
+# Объединяем весь черный список
+ALL_STOP_PATTERNS = GARBAGE_PATTERNS + ADULT_PATTERNS + UZBEK_PATTERNS + REGIONAL_PATTERNS
+
+# Категории (без 18+)
 CATEGORIES = {
     "Кино и Сериалы": [
         "кино", "film", "movie", "cinema", "tv1000", "vip", "fox", "amedia", 
@@ -45,17 +76,13 @@ CATEGORIES = {
     "Федеральные / Эфирные": [
         "первый канал", "россия 1", "нтв", "тнт", "стс", "пятница", 
         "рен тв", "тв-3", "тв 3", "звезда", "твц", "домашний", "че!", "спас", "отр", "мир"
-    ],
-    "18+": [
-        "18+", "xxx", "porn", "adult", "hustler", "brazzers", "penthouse", 
-        "playboy", "русская ночь", "blue hustler", "redlight"
     ]
 }
 
-def is_garbage(name):
-    name_low = name.lower()
-    for stop in STOP_WORDS:
-        if re.search(stop, name_low):
+def is_garbage(text):
+    text_low = text.lower()
+    for pattern in ALL_STOP_PATTERNS:
+        if re.search(pattern, text_low):
             return True
     return False
 
@@ -68,17 +95,17 @@ def detect_category(name):
     return "Разное"
 
 def run():
-    print(f"Качаю плейлист с GitHub (файл весит прилично, подожди секунд 10-20)...")
+    print("Качаю плейлист...")
     req = urllib.request.Request(URL, headers={'User-Agent': 'Mozilla/5.0'})
     try:
-        with urllib.request.urlopen(req) as response:
+        with urllib.request.urlopen(req, timeout=60) as response:
             content = response.read().decode('utf-8', errors='ignore')
     except Exception as e:
-        print(f"Не удалось скачать: {e}")
+        print(f"Ошибка загрузки: {e}")
         return
 
     lines = content.splitlines()
-    print(f"Всего строк скачано: {len(lines)}. Начинаю фильтрацию...")
+    print(f"Скачано строк: {len(lines)}. Фильтрую мусор, 18+ и узбекские каналы...")
 
     seen_urls = set()
     cleaned_channels = []
@@ -96,6 +123,7 @@ def run():
         elif not line.startswith("#") and current_extinf:
             url = line
 
+            # Проверка дублей ссылок
             if url in seen_urls:
                 skipped_duplicates += 1
                 current_extinf = None
@@ -103,7 +131,9 @@ def run():
 
             channel_name = current_extinf.split(",")[-1].strip()
 
-            if is_garbage(channel_name):
+            # Проверяем на мусор И название канала, И всю строку #EXTINF целиком (где теги групп)
+            full_meta = f"{current_extinf} {channel_name}"
+            if is_garbage(full_meta):
                 skipped_trash += 1
                 current_extinf = None
                 continue
@@ -128,11 +158,5 @@ def run():
         for _, extinf, url in cleaned_channels:
             f.write(f"{extinf}\n{url}\n")
 
-    print("\nОбработка завершена успешно!")
-    print(f"-> Вырезано дубликатов: {skipped_duplicates}")
-    print(f"-> Вырезано регионов/мусора: {skipped_trash}")
-    print(f"-> Отобрано чистых каналов: {len(cleaned_channels)}")
-    print(f"-> Файл сохранен в: {OUTPUT_FILE}")
-
-if __name__ == "__main__":
-    run()
+    print("\nГотово!")
+    print(f"-> Удал
