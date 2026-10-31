@@ -5,7 +5,7 @@ import urllib.request
 URL = "https://raw.githubusercontent.com/IPTVRU2026/IPTVMIR/main/IPTV_MEGA_PLAYLIST.m3u"
 OUTPUT_FILE = "cleaned.m3u"
 
-# 1. ЧАСОВЫЕ ПОЯСА И ТЕХНИЧЕСКИЙ МУСОР
+# 1. ЧАСОВЫЕ ПОЯСА И МУСОР
 GARBAGE_PATTERNS = [
     r"\+\d", r"\(\+\d\)", r"timeshift", r"резерв", r"тест", r"test", 
     r"offline", r"заглушка", r"инфоканал", r"promo", r"промо"
@@ -27,7 +27,7 @@ UZBEK_PATTERNS = [
     r"ozbekiston", r"ruxsor", r"xorazm", r"andijon", r"qashqadaryo", r"surxondaryo"
 ]
 
-# 4. РЕГИОНЫ РФ (Города, области, местные ГТРК)
+# 4. РЕГИОНЫ РФ
 REGIONAL_PATTERNS = [
     r"гтрк", r"дон-тр", r"дон 24", r"губерния", r"бст", r"тнв", r"югра", r"ямал",
     r"кубань", r"башкортостан", r"татарстан", r"моя удмуртия", r"чаваш ен",
@@ -42,10 +42,8 @@ REGIONAL_PATTERNS = [
     r"норильск", r"грозный", r"дагестан", r"осетия", r"армения", r"беларусь"
 ]
 
-# Объединяем весь черный список
 ALL_STOP_PATTERNS = GARBAGE_PATTERNS + ADULT_PATTERNS + UZBEK_PATTERNS + REGIONAL_PATTERNS
 
-# Категории (без 18+)
 CATEGORIES = {
     "Кино и Сериалы": [
         "кино", "film", "movie", "cinema", "tv1000", "vip", "fox", "amedia", 
@@ -105,7 +103,7 @@ def run():
         return
 
     lines = content.splitlines()
-    print(f"Скачано строк: {len(lines)}. Фильтрую мусор, 18+ и узбекские каналы...")
+    print(f"Скачано строк: {len(lines)}. Фильтрую мусор...")
 
     seen_urls = set()
     cleaned_channels = []
@@ -123,16 +121,14 @@ def run():
         elif not line.startswith("#") and current_extinf:
             url = line
 
-            # Проверка дублей ссылок
             if url in seen_urls:
                 skipped_duplicates += 1
                 current_extinf = None
                 continue
 
             channel_name = current_extinf.split(",")[-1].strip()
-
-            # Проверяем на мусор И название канала, И всю строку #EXTINF целиком (где теги групп)
             full_meta = f"{current_extinf} {channel_name}"
+
             if is_garbage(full_meta):
                 skipped_trash += 1
                 current_extinf = None
@@ -140,7 +136,6 @@ def run():
 
             category = detect_category(channel_name)
 
-            # Проставляем категорию
             if 'group-title="' in current_extinf:
                 current_extinf = re.sub(r'group-title="[^"]*"', f'group-title="{category}"', current_extinf)
             else:
@@ -150,7 +145,6 @@ def run():
             cleaned_channels.append((category, current_extinf, url))
             current_extinf = None
 
-    # Сортировка по категориям
     cleaned_channels.sort(key=lambda x: x[0])
 
     with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
@@ -158,5 +152,11 @@ def run():
         for _, extinf, url in cleaned_channels:
             f.write(f"{extinf}\n{url}\n")
 
-    print("\nГотово!")
-    print(f"-> Удал
+    print("Готово!")
+    print("Удалено дублей: " + str(skipped_duplicates))
+    print("Вырезано мусора: " + str(skipped_trash))
+    print("Осталось каналов: " + str(len(cleaned_channels)))
+    print("Файл сохранен: " + OUTPUT_FILE)
+
+if __name__ == "__main__":
+    run()
