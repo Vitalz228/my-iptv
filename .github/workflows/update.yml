@@ -1,0 +1,31 @@
+name: Auto Update IPTV
+
+on:
+  schedule:
+    - cron: '0 3 * * *' # Запуск каждую ночь в 03:00 UTC
+  workflow_dispatch:     # Кнопка для ручного запуска в любой момент
+
+permissions:
+  contents: write
+
+jobs:
+  update-playlist:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Загрузка репозитория
+        uses: actions/checkout@v4
+
+      - name: Установка Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Запуск очистки плейлиста
+        run: python clean_m3u.py
+
+      - name: Сохранение результата
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add cleaned.m3u
+          git diff --staged --quiet || (git commit -m "Автообновление плейлиста" && git push)
